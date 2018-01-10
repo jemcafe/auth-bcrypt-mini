@@ -19,13 +19,13 @@ app.use(session({
 app.use(express.static(`${__dirname}/../build`));
 
 app.post('/register', (req, res) => {
-  // Get the database
+  // Database instance
   const db = app.get('db');
 
-  //The username and password from the client
+  // The username and password from the client
   const { username, password } = req.body;
 
-  //bcrypt takes the password and changes it
+  // bcrypt takes the password and changes it
   bcrypt.hash(password, saltRounds).then( hashedPassword => {
 
     db.create_user([username, hashedPassword]).then( () => {
@@ -41,25 +41,38 @@ app.post('/register', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-  // Add code here
+  // Database instance
   const db = app.get('db');
+
+  // The username and password from the client
   const { username, password } = req.body;
-  db.find_user([username]).then(users => {
+
+  // Finds the given username in the database
+  db.find_user([username]).then( users => {
+
+    // If there are any users
     if (users.length) {
-      if (users[0].password === password) {
-        req.session.user = { username: users[0].username };
-        res.json({ user: req.session.user });
-      } else {
-        res.status(403).json({ message: 'Wrong password' })
-      }
+      // passwords are compared
+      bcrypt.compare(password, users[0].password).then( passwordMatch => {
+
+        // If the passwords match, the session object's username is the given username
+        if ( passwordMatch ) {
+          req.session.user = { username: users[0].username };
+          res.json({ user: req.session.user });
+        } else {
+          res.status(403).json({ message: 'Wrong password' })
+        }
+        
+      });
+      
     } else {
       res.status(403).json({ message: "That user is not registered" })
     }
+
   })
 });
 
 app.post('/logout', (req, res) => {
-  // Add code here
   req.session.destroy();
   res.status(200).send();
 });
