@@ -2,6 +2,9 @@ const express = require('express');
 const bodyPaser = require('body-parser');
 const session = require('express-session');
 const massive = require('massive');
+const bcrypt = require('bcrypt');
+
+const saltRounds = 12;
 
 require('dotenv').config();
 const app = express();
@@ -16,28 +19,49 @@ app.use(session({
 app.use(express.static(`${__dirname}/../build`));
 
 app.post('/register', (req, res) => {
-  // Add code here
+  // Get the database
   const db = app.get('db');
 
-  //The user object is created for the session 
+  //The username and password from the client
   const { username, password } = req.body;
-  db.create_user([username, password]).then( () => {
-    req.session.user = { username };
-    res.json({ user: req.session.user });
-  }).catch( err => {
-    console.log( err );
-    res.status(500).json({ message: 'Something wrong'});
+
+  //bcrypt takes the password and changes it
+  bcrypt.hash(password, saltRounds).then( hashedPassword => {
+
+    db.create_user([username, hashedPassword]).then( () => {
+        req.session.user = { username: username };
+        res.json({ user: req.session.user });
+      }).catch( err => {
+        console.log( err );
+        res.status(500).json({ message: 'Something wrong'});
+      });
+
   });
+  
 });
 
 app.post('/login', (req, res) => {
   // Add code here
-  req.session.destroy();
-  res.status(200).send();
+  const db = app.get('db');
+  const { username, password } = req.body;
+  db.find_user([username]).then(users => {
+    if (users.length) {
+      if (users[0].password === password) {
+        req.session.user = { username: users[0].username };
+        res.json({ user: req.session.user });
+      } else {
+        res.status(403).json({ message: 'Wrong password' })
+      }
+    } else {
+      res.status(403).json({ message: "That user is not registered" })
+    }
+  })
 });
 
 app.post('/logout', (req, res) => {
   // Add code here
+  req.session.destroy();
+  res.status(200).send();
 });
 
 function ensureLoggedIn(req, res, next) {
